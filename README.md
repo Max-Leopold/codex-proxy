@@ -10,14 +10,39 @@ This is a compatibility adapter, not a transparent OpenAI proxy. The Codex backe
 
 ## Requirements
 
-- Go 1.22+
 - Codex CLI authenticated with ChatGPT:
 
 ```bash
 codex login
 ```
 
+- Go 1.22+ only if building from source
+
+## Install
+
+macOS/Linux users can install the latest main build directly:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Max-Leopold/codex-proxy/main/scripts/install.sh | bash
+```
+
+By default this installs to `/usr/local/bin`. To install somewhere else:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Max-Leopold/codex-proxy/main/scripts/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
+```
+
+Downloadable binaries for macOS, Linux, and Windows are published on the [GitHub Releases page](https://github.com/Max-Leopold/codex-proxy/releases).
+
 ## Run
+
+```bash
+codex-proxy --port 6769
+```
+
+The server always binds to `127.0.0.1`.
+
+## Build from source
 
 ```bash
 go run . --port 6769
@@ -29,8 +54,6 @@ or:
 go build -o codex-proxy .
 ./codex-proxy --port 6769
 ```
-
-The server always binds to `127.0.0.1`.
 
 ## Client configuration
 
