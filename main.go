@@ -4,19 +4,25 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
 const (
-	listenHost  = "127.0.0.1"
+	defaultHost = "127.0.0.1"
 	defaultPort = 6769
+	apiKeyEnv   = "CODEX_PROXY_API_KEY"
 )
 
 type config struct {
+	host      string
 	port      int
 	codexHome string
+	apiKey    string
 }
 
 func main() {
@@ -35,9 +41,9 @@ func run(args []string) error {
 	tokens := &TokenSource{codexHome: cfg.codexHome}
 	codex := &CodexClient{tokens: tokens}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{}))
-	server := &Server{codex: codex, log: logger}
+	server := &Server{codex: codex, log: logger, apiKey: cfg.apiKey}
 
-	addr := fmt.Sprintf("%s:%d", listenHost, cfg.port)
+	addr := net.JoinHostPort(cfg.host, strconv.Itoa(cfg.port))
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           server.Routes(),
@@ -52,9 +58,11 @@ func parseFlags(args []string) (config, error) {
 	fs := flag.NewFlagSet("codex-proxy", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	cfg := config{}
+	cfg := config{host: defaultHost}
+	fs.StringVar(&cfg.host, "host", defaultHost, "host/interface to listen on")
 	fs.IntVar(&cfg.port, "port", defaultPort, "port to listen on")
 	fs.StringVar(&cfg.codexHome, "codex-home", "", "Codex home directory; defaults to CODEX_HOME or ~/.codex")
+	fs.StringVar(&cfg.apiKey, "api-key", "", "API key required as Authorization bearer token; defaults to CODEX_PROXY_API_KEY")
 
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "Usage: codex-proxy [options]\n\nOptions:\n")
@@ -70,5 +78,19 @@ func parseFlags(args []string) (config, error) {
 	if cfg.port < 0 || cfg.port > 65535 {
 		return cfg, fmt.Errorf("invalid --port %d", cfg.port)
 	}
+	if cfg.apiKey == "" {
+		cfg.apiKey = os.Getenv(apiKeyEnv)
+	}
+	if cfg.apiKey == "" && !isLoopbackHost(cfg.host) {
+		return cfg, fmt.Errorf("refusing to listen on non-loopback host %q without --api-key or %s", cfg.host, apiKeyEnv)
+	}
 	return cfg, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,8 +14,9 @@ import (
 )
 
 type Server struct {
-	codex *CodexClient
-	log   *slog.Logger
+	codex  *CodexClient
+	log    *slog.Logger
+	apiKey string
 }
 
 func (s *Server) Routes() http.Handler {
@@ -22,7 +25,35 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/models", s.handleModels)
 	mux.HandleFunc("POST /v1/responses", s.handleResponses)
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletions)
-	return s.logRequests(mux)
+	return s.logRequests(s.requireAPIKey(mux))
+}
+
+func (s *Server) requireAPIKey(next http.Handler) http.Handler {
+	if s.apiKey == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !validBearerToken(r.Header.Get("Authorization"), s.apiKey) {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="codex-proxy"`)
+			writeOpenAIError(w, http.StatusUnauthorized, "missing or invalid API key")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func validBearerToken(header, apiKey string) bool {
+	scheme, token, ok := strings.Cut(header, " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
+		return false
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+	tokenHash := sha256.Sum256([]byte(token))
+	apiKeyHash := sha256.Sum256([]byte(apiKey))
+	return subtle.ConstantTimeCompare(tokenHash[:], apiKeyHash[:]) == 1
 }
 
 func (s *Server) logRequests(next http.Handler) http.Handler {

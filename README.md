@@ -40,7 +40,15 @@ Downloadable binaries for macOS, Linux, and Windows are published on the [GitHub
 codex-proxy --port 6769
 ```
 
-The server always binds to `127.0.0.1`.
+By default the server binds to `127.0.0.1` with no proxy API key.
+
+To listen on a non-loopback interface, you must set a proxy API key. Prefer the environment variable on shared systems because `--api-key` can appear in shell history and process lists:
+
+```bash
+CODEX_PROXY_API_KEY='replace-with-a-long-random-key' codex-proxy --host 0.0.0.0 --port 6769
+```
+
+You can also pass `--api-key` directly. OpenAI-compatible clients should set `OPENAI_API_KEY` to the same value; they will send it as `Authorization: Bearer <OPENAI_API_KEY>`.
 
 ## Build from source
 
@@ -64,11 +72,13 @@ export OPENAI_BASE_URL=http://127.0.0.1:6769/v1
 export OPENAI_API_KEY=dummy
 ```
 
-The proxy ignores the incoming API key; many clients just require that one is set.
+The proxy ignores the incoming API key unless a proxy API key is configured; then `OPENAI_API_KEY` must match the proxy API key.
 
 Logs include request metadata, status, bytes, and duration. Request and response bodies are not logged.
 
 ## Examples
+
+If a proxy API key is configured, add `-H 'Authorization: Bearer <api-key>'` to these `curl` examples.
 
 List models:
 
@@ -110,10 +120,16 @@ curl http://127.0.0.1:6769/v1/chat/completions \
 
 ## Remote access
 
-`codex-proxy` only listens on `127.0.0.1`. If you run it on a VPS and need to use it from your laptop, use an SSH tunnel instead of exposing the proxy publicly:
+By default `codex-proxy` only listens on `127.0.0.1`. The safest way to use it remotely is still an SSH tunnel:
 
 ```bash
 ssh -L 6769:127.0.0.1:6769 user@your-vps
+```
+
+If you intentionally expose it from a VPS, bind to a public interface and require a proxy API key:
+
+```bash
+CODEX_PROXY_API_KEY='replace-with-a-long-random-key' codex-proxy --host 0.0.0.0 --port 6769
 ```
 
 ## Supported routes
